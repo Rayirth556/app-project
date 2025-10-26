@@ -97,3 +97,107 @@ INSERT INTO spending_limits (category_id, limit_amount, period) VALUES
 (1, 500.00, 'monthly'),
 (2, 300.00, 'monthly'),
 (NULL, 2000.00, 'monthly'); -- Overall spending limit
+
+-- ============================================
+-- STOCK MARKET SIMULATION TABLES
+-- ============================================
+
+-- Stock symbols table
+CREATE TABLE IF NOT EXISTS stock_symbols (
+    symbol_id INT AUTO_INCREMENT PRIMARY KEY,
+    symbol VARCHAR(10) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Historical market data (10 years, daily)
+CREATE TABLE IF NOT EXISTS market_data (
+    data_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    symbol_id INT NOT NULL,
+    trade_date DATE NOT NULL,
+    open_price DECIMAL(10,2) NOT NULL,
+    high_price DECIMAL(10,2) NOT NULL,
+    low_price DECIMAL(10,2) NOT NULL,
+    close_price DECIMAL(10,2) NOT NULL,
+    adjusted_close DECIMAL(10,2) NOT NULL,
+    volume BIGINT,
+    FOREIGN KEY (symbol_id) REFERENCES stock_symbols(symbol_id),
+    UNIQUE KEY unique_symbol_date (symbol_id, trade_date),
+    INDEX idx_symbol_date (symbol_id, trade_date)
+) ENGINE=InnoDB;
+
+-- Simulated trading account
+CREATE TABLE IF NOT EXISTS simulated_accounts (
+    account_id INT AUTO_INCREMENT PRIMARY KEY,
+    account_name VARCHAR(100) NOT NULL,
+    initial_cash DECIMAL(15,2) NOT NULL,
+    current_cash DECIMAL(15,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Portfolio positions
+CREATE TABLE IF NOT EXISTS positions (
+    position_id INT AUTO_INCREMENT PRIMARY KEY,
+    account_id INT NOT NULL,
+    symbol_id INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 0,
+    avg_cost DECIMAL(10,2) NOT NULL,
+    current_value DECIMAL(15,2),
+    unrealized_pnl DECIMAL(15,2),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (account_id) REFERENCES simulated_accounts(account_id),
+    FOREIGN KEY (symbol_id) REFERENCES stock_symbols(symbol_id),
+    UNIQUE KEY unique_account_symbol (account_id, symbol_id)
+) ENGINE=InnoDB;
+
+-- Orders (pending/executed)
+CREATE TABLE IF NOT EXISTS orders (
+    order_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    account_id INT NOT NULL,
+    symbol_id INT NOT NULL,
+    order_type ENUM('MARKET', 'LIMIT') NOT NULL,
+    side ENUM('BUY', 'SELL') NOT NULL,
+    quantity INT NOT NULL,
+    limit_price DECIMAL(10,2),
+    status ENUM('PENDING', 'FILLED', 'CANCELLED', 'REJECTED') DEFAULT 'PENDING',
+    filled_quantity INT DEFAULT 0,
+    filled_price DECIMAL(10,2),
+    order_date DATE NOT NULL,
+    filled_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (account_id) REFERENCES simulated_accounts(account_id),
+    FOREIGN KEY (symbol_id) REFERENCES stock_symbols(symbol_id),
+    INDEX idx_account_status (account_id, status)
+) ENGINE=InnoDB;
+
+-- Trades (executed transactions)
+CREATE TABLE IF NOT EXISTS trades (
+    trade_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    account_id INT NOT NULL,
+    symbol_id INT NOT NULL,
+    side ENUM('BUY', 'SELL') NOT NULL,
+    quantity INT NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    commission DECIMAL(10,2) DEFAULT 0,
+    total_amount DECIMAL(15,2) NOT NULL,
+    trade_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (account_id) REFERENCES simulated_accounts(account_id),
+    FOREIGN KEY (symbol_id) REFERENCES stock_symbols(symbol_id),
+    INDEX idx_account_date (account_id, trade_date)
+) ENGINE=InnoDB;
+
+-- Insert sample stock symbols
+INSERT IGNORE INTO stock_symbols (symbol, name) VALUES
+('AAPL', 'Apple Inc.'),
+('GOOGL', 'Alphabet Inc.'),
+('MSFT', 'Microsoft Corporation'),
+('AMZN', 'Amazon.com Inc.'),
+('TSLA', 'Tesla Inc.');
+
+-- Create default demo account with $100,000
+INSERT IGNORE INTO simulated_accounts (account_id, account_name, initial_cash, current_cash) VALUES
+(1, 'Demo Account', 100000.00, 100000.00);

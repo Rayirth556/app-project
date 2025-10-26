@@ -120,6 +120,17 @@ public class TransactionPanel extends JPanel {
             BorderFactory.createLineBorder(new Color(209, 213, 219)),
             new EmptyBorder(8, 12, 8, 12)
         ));
+        // Render Category objects by name to avoid showing the full toString()
+        categoryCombo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof Category) {
+                    setText(((Category) value).getName());
+                }
+                return this;
+            }
+        });
         
         typeCombo = new JComboBox<>(Transaction.TransactionType.values());
         typeCombo.setFont(new Font("Segoe UI", Font.PLAIN, 14));
@@ -129,7 +140,7 @@ public class TransactionPanel extends JPanel {
         ));
         
         dateField = new JFormattedTextField();
-        dateField.setValue(LocalDate.now());
+        dateField.setValue(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
         dateField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         dateField.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(new Color(209, 213, 219)),
@@ -157,13 +168,24 @@ public class TransactionPanel extends JPanel {
     
     private JPanel createTopPanel() {
         JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setOpaque(false);
-        topPanel.setBorder(new EmptyBorder(0, 0, 16, 0));
+        // Make the top panel paint its background so the white card below doesn't show through
+        topPanel.setOpaque(true);
+        topPanel.setBackground(BACKGROUND_COLOR);
+        topPanel.setBorder(new EmptyBorder(0, 0, 24, 0));
         
         // Title
         JLabel titleLabel = new JLabel("Transaction Management");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
         titleLabel.setForeground(TEXT_PRIMARY);
+
+        // Wrap the title in a small white "card" to visually separate it from the table card below
+        JPanel titleCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        titleCard.setBackground(CARD_COLOR);
+        titleCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(229, 231, 235)),
+            new EmptyBorder(10, 12, 10, 12)
+        ));
+        titleCard.add(titleLabel);
         
         // Filter panel
         JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
@@ -188,6 +210,19 @@ public class TransactionPanel extends JPanel {
         
         JComboBox<Category> categoryFilter = new JComboBox<>();
         categoryFilter.addItem(null); // All categories
+        // Render categories by name (and show friendly label for null)
+        categoryFilter.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof Category) {
+                    setText(((Category) value).getName());
+                } else if (value == null) {
+                    setText("All Categories");
+                }
+                return this;
+            }
+        });
         List<Category> categories = categoryDAO.findAll();
         for (Category category : categories) {
             categoryFilter.addItem(category);
@@ -217,6 +252,18 @@ public class TransactionPanel extends JPanel {
             tableSorter.setRowFilter(null);
         });
         
+        // Refresh button
+        JButton refreshButton = new JButton("🔄 Refresh");
+        refreshButton.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        refreshButton.setBackground(PRIMARY_COLOR);
+        refreshButton.setForeground(Color.WHITE);
+        refreshButton.setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 12));
+        refreshButton.setFocusPainted(false);
+        refreshButton.addActionListener(e -> {
+            loadTransactions();
+            JOptionPane.showMessageDialog(this, "Transactions refreshed!", "Success", JOptionPane.INFORMATION_MESSAGE);
+        });
+        
         filterPanel.add(typeFilterLabel);
         filterPanel.add(typeFilter);
         filterPanel.add(categoryFilterLabel);
@@ -224,8 +271,9 @@ public class TransactionPanel extends JPanel {
         filterPanel.add(dateFilterLabel);
         filterPanel.add(dateFilter);
         filterPanel.add(clearFiltersButton);
+        filterPanel.add(refreshButton);
         
-        topPanel.add(titleLabel, BorderLayout.WEST);
+        topPanel.add(titleCard, BorderLayout.WEST);
         topPanel.add(filterPanel, BorderLayout.EAST);
         
         return topPanel;
@@ -234,15 +282,25 @@ public class TransactionPanel extends JPanel {
     private JPanel createCenterPanel() {
         JPanel centerPanel = new JPanel(new BorderLayout());
         centerPanel.setOpaque(false);
-        
-        // Transaction table
+
+        // Transaction table inside a white card so sections are distinct
         JScrollPane scrollPane = new JScrollPane(transactionTable);
-        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(229, 231, 235)));
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.setBackground(CARD_COLOR);
         scrollPane.getViewport().setBackground(CARD_COLOR);
-        
-        centerPanel.add(scrollPane, BorderLayout.CENTER);
-        
+
+        JPanel tableCard = new JPanel(new BorderLayout());
+        tableCard.setBackground(CARD_COLOR);
+        tableCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(229, 231, 235)),
+            new EmptyBorder(12, 12, 12, 12)
+        ));
+        tableCard.add(scrollPane, BorderLayout.CENTER);
+
+        // Add a small top gap so the card doesn't butt directly under the title
+        centerPanel.setBorder(new EmptyBorder(8, 0, 8, 0));
+        centerPanel.add(tableCard, BorderLayout.CENTER);
+
         return centerPanel;
     }
     
@@ -370,23 +428,36 @@ public class TransactionPanel extends JPanel {
     }
     
     private void loadTransactions() {
-        tableModel.setRowCount(0);
-        List<Transaction> transactions = transactionDAO.findAll();
-        
-        for (Transaction transaction : transactions) {
-            Category category = categoryDAO.findById(transaction.getCategoryId());
-            String categoryName = category != null ? category.getName() : "Unknown";
+        SwingUtilities.invokeLater(() -> {
+            // Clear any row filters before repopulating
+            if (tableSorter != null) {
+                tableSorter.setRowFilter(null);
+            }
+            tableModel.setRowCount(0);
+            List<Transaction> transactions = transactionDAO.findAll();
             
-            Object[] row = {
-                transaction.getTransactionId(),
-                transaction.getDate().format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
-                categoryName,
-                transaction.getDescription() != null ? transaction.getDescription() : "",
-                transaction.getAmount(),
-                transaction.getType()
-            };
-            tableModel.addRow(row);
-        }
+            System.out.println("Loading " + transactions.size() + " transactions...");
+            
+            for (Transaction transaction : transactions) {
+                Category category = categoryDAO.findById(transaction.getCategoryId());
+                String categoryName = category != null ? category.getName() : "Unknown";
+                
+                Object[] row = {
+                    transaction.getTransactionId(),
+                    transaction.getDate().format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
+                    categoryName,
+                    transaction.getDescription() != null ? transaction.getDescription() : "",
+                    transaction.getAmount(),
+                    transaction.getType()
+                };
+                tableModel.addRow(row);
+            }
+            
+            tableModel.fireTableDataChanged();
+            transactionTable.revalidate();
+            transactionTable.repaint();
+            System.out.println("Table updated with " + tableModel.getRowCount() + " rows");
+        });
     }
     
     private void loadCategories() {
@@ -412,8 +483,14 @@ public class TransactionPanel extends JPanel {
             }
             
             LocalDate date = LocalDate.now();
-            if (dateField.getValue() instanceof LocalDate) {
-                date = (LocalDate) dateField.getValue();
+            try {
+                String dateStr = dateField.getText().trim();
+                if (!dateStr.isEmpty()) {
+                    date = LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                }
+            } catch (Exception ex) {
+                // If parsing fails, use current date
+                System.err.println("Failed to parse date, using current date: " + ex.getMessage());
             }
             
             Category selectedCategory = (Category) categoryCombo.getSelectedItem();
@@ -450,7 +527,7 @@ public class TransactionPanel extends JPanel {
     private void clearForm() {
         amountField.setText("");
         descriptionField.setText("");
-        dateField.setValue(LocalDate.now());
+        dateField.setValue(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
         categoryCombo.setSelectedIndex(0);
         typeCombo.setSelectedIndex(0);
     }

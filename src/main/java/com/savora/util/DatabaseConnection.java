@@ -115,7 +115,19 @@ public class DatabaseConnection {
                 for (String statement : statements) {
                     statement = statement.trim();
                     if (!statement.isEmpty()) {
-                        stmt.execute(statement);
+                        try {
+                            stmt.execute(statement);
+                        } catch (SQLException se) {
+                            // Ignore duplicate-key / already-exists errors while initializing schema
+                            String msg = se.getMessage() != null ? se.getMessage().toLowerCase() : "";
+                            if (msg.contains("duplicate key") || msg.contains("already exists") || msg.contains("duplicate key name") || msg.contains("errno 1061")) {
+                                // benign when schema was previously initialized
+                                System.out.println("Schema statement skipped: " + se.getMessage());
+                                continue;
+                            }
+                            // rethrow if it's a different SQL error
+                            throw se;
+                        }
                     }
                 }
             }

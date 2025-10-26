@@ -1,6 +1,8 @@
 package com.savora.view;
 
 import com.savora.dao.TransactionDAO;
+import com.savora.dao.CategoryDAO;
+import javax.swing.table.DefaultTableModel;
 import com.savora.model.Transaction;
 import com.savora.util.DatabaseConnection;
 
@@ -27,6 +29,12 @@ public class MainFrame extends JFrame {
     private BudgetPanel budgetPanel;
     private AnalyticsPanel analyticsPanel;
     private SpendingLimitPanel spendingLimitPanel;
+    private StockMarketPanel stockMarketPanel;
+    private EducationPanel educationPanel;
+    // Recent transactions table on dashboard
+    private JTable recentTable;
+    private DefaultTableModel recentTableModel;
+    private CategoryDAO categoryDAO;
     
     // Colors for modern UI
     private static final Color PRIMARY_COLOR = new Color(59, 130, 246);
@@ -39,6 +47,7 @@ public class MainFrame extends JFrame {
     
     public MainFrame() {
         this.transactionDAO = new TransactionDAO();
+        this.categoryDAO = new CategoryDAO();
         initializeComponents();
         setupLayout();
         setupEventHandlers();
@@ -64,6 +73,8 @@ public class MainFrame extends JFrame {
         budgetPanel = new BudgetPanel(this);
         analyticsPanel = new AnalyticsPanel(this);
         spendingLimitPanel = new SpendingLimitPanel();
+        stockMarketPanel = new StockMarketPanel(this);
+        educationPanel = new EducationPanel();
         
         // Create tabbed pane
         tabbedPane = new JTabbedPane();
@@ -76,6 +87,8 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Budgets", budgetPanel);
         tabbedPane.addTab("Spending Limits", spendingLimitPanel);
         tabbedPane.addTab("Analytics", analyticsPanel);
+        tabbedPane.addTab("Stock Market", stockMarketPanel);
+        tabbedPane.addTab("📚 Education", educationPanel);
         
         // Set modern tab appearance
         for (int i = 0; i < tabbedPane.getTabCount(); i++) {
@@ -218,8 +231,13 @@ public class MainFrame extends JFrame {
         
         // Table for recent transactions
         String[] columnNames = {"Date", "Category", "Description", "Amount", "Type"};
-        Object[][] data = {}; // Will be populated
-        JTable recentTable = new JTable(data, columnNames);
+        recentTableModel = new DefaultTableModel(columnNames, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        recentTable = new JTable(recentTableModel);
         recentTable.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         recentTable.setRowHeight(32);
         recentTable.setShowGrid(false);
@@ -300,6 +318,31 @@ public class MainFrame extends JFrame {
                 balanceLabel.setForeground(SUCCESS_COLOR);
             } else {
                 balanceLabel.setForeground(DANGER_COLOR);
+            }
+            // Populate recent transactions table (show latest 10)
+            if (recentTableModel != null) {
+                recentTableModel.setRowCount(0);
+                List<Transaction> all = transactionDAO.findAll();
+                int limit = Math.min(all.size(), 10);
+                DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MMM dd, yyyy");
+                for (int i = 0; i < limit; i++) {
+                    Transaction t = all.get(i);
+                    String categoryName = "Unknown";
+                    try {
+                        com.savora.model.Category cat = categoryDAO.findById(t.getCategoryId());
+                        if (cat != null) categoryName = cat.getName();
+                    } catch (Exception ex) {
+                        // ignore
+                    }
+                    Object[] row = new Object[] {
+                        t.getDate().format(fmt),
+                        categoryName,
+                        t.getDescription() != null ? t.getDescription() : "",
+                        "$" + t.getAmount().toString(),
+                        t.getType().toString()
+                    };
+                    recentTableModel.addRow(row);
+                }
             }
             
         } catch (Exception e) {
