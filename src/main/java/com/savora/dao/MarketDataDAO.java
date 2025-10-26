@@ -192,6 +192,25 @@ public class MarketDataDAO {
     }
     
     /**
+     * Delete all market data for a symbol
+     */
+    public boolean deleteBySymbolId(int symbolId) {
+        String sql = "DELETE FROM market_data WHERE symbol_id = ?";
+        
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, symbolId);
+            stmt.executeUpdate();
+            return true;
+            
+        } catch (SQLException e) {
+            System.err.println("Error deleting market data for symbol " + symbolId + ": " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
      * Map ResultSet to MarketData
      */
     private MarketData mapResultSetToMarketData(ResultSet rs) throws SQLException {

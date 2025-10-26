@@ -61,7 +61,7 @@ public class MockDataGenerator {
      * Generate and insert 10 years of mock data for all configured stocks
      */
     public void generateAllData() {
-        LocalDate endDate = LocalDate.now().minusDays(1); // Yesterday
+        LocalDate endDate = LocalDate.now(); // Include today
         LocalDate startDate = endDate.minusYears(10);
         
         System.out.println("Starting mock data generation for 10 years (" + startDate + " to " + endDate + ")");
@@ -81,11 +81,11 @@ public class MockDataGenerator {
                 continue;
             }
             
-            // Check if data already exists
+            // Check if data already exists and delete it to regenerate with current dates
             int existingCount = marketDataDAO.getDataCountForSymbol(stockSymbol.getSymbolId());
             if (existingCount > 0) {
-                System.out.println("  " + symbol + " already has " + existingCount + " data points. Skipping.");
-                continue;
+                System.out.println("  " + symbol + " has " + existingCount + " old data points. Deleting...");
+                marketDataDAO.deleteBySymbolId(stockSymbol.getSymbolId());
             }
             
             // Generate data

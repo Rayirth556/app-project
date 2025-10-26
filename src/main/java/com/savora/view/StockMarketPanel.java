@@ -588,12 +588,30 @@ public class StockMarketPanel extends JPanel {
     }
     
     private void updateChart(StockSymbol symbol) {
-        LocalDate endDate = LocalDate.now();
+        if (symbol == null) {
+            System.out.println("updateChart called with null symbol");
+            return;
+        }
+        
+        LocalDate endDate = LocalDate.now().minusDays(1); // Use yesterday as end date since data goes to yesterday
         LocalDate startDate = endDate.minusMonths(6); // Show 6 months
+        
+        System.out.println("Updating chart for " + symbol.getSymbol() + " (ID: " + symbol.getSymbolId() + ")");
+        System.out.println("Date range: " + startDate + " to " + endDate);
         
         List<MarketData> data = marketDataDAO.findBySymbolAndDateRange(
             symbol.getSymbolId(), startDate, endDate
         );
+        
+        System.out.println("Found " + data.size() + " data points for " + symbol.getSymbol());
+        
+        // If no data found in recent 6 months, try last 12 months
+        if (data.isEmpty()) {
+            startDate = endDate.minusMonths(12);
+            System.out.println("No data in 6 months, trying 12 months: " + startDate + " to " + endDate);
+            data = marketDataDAO.findBySymbolAndDateRange(symbol.getSymbolId(), startDate, endDate);
+            System.out.println("Found " + data.size() + " data points in 12 months for " + symbol.getSymbol());
+        }
         
         TimeSeries series = new TimeSeries(symbol.getSymbol());
         for (MarketData md : data) {
@@ -606,8 +624,16 @@ public class StockMarketPanel extends JPanel {
         }
         
         TimeSeriesCollection dataset = new TimeSeriesCollection(series);
+        String chartTitle = symbol.getSymbol() + " - Price History";
+        if (!data.isEmpty()) {
+            int months = (int) java.time.temporal.ChronoUnit.MONTHS.between(startDate, endDate);
+            chartTitle += " (" + months + " Months)";
+        } else {
+            chartTitle += " (No Data Available)";
+        }
+        
         JFreeChart chart = ChartFactory.createTimeSeriesChart(
-            symbol.getSymbol() + " - Price History (6 Months)",
+            chartTitle,
             "Date",
             "Price ($)",
             dataset,
@@ -617,6 +643,8 @@ public class StockMarketPanel extends JPanel {
         );
         
         chartPanel.setChart(chart);
+        chartPanel.repaint();
+        System.out.println("Chart updated for " + symbol.getSymbol());
     }
     
     private void placeOrder() {
