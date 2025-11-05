@@ -34,7 +34,7 @@ Savora is not just another finance app. The goal is to become an **officially ce
 
 ## Current Status
 
-- **Tech Stack:** Java Swing, MySQL, Spring Boot.
+- **Tech Stack:** Java Swing, MySQL.
 - **Team:** 4 members focused on product design, frontend development, game mechanics, and future backend integrations.
 - **Development Stage:** Core features are built for demo and pilot testing. Roadmap includes production-grade wallet simulations, real-world data integrations, regulatory compliance, and official partnerships.
 
